@@ -1,0 +1,90 @@
+version: "3.7"
+
+services:
+  eureka-naming-server:
+    image: pma/eureka-naming-server:0.0.1-SNAPSHOT
+    container_name: eureka
+    ports:
+      - 8761:8761
+    restart: always
+    networks:
+      - pma-network
+
+  zuul-api-gateway:
+    image: pma/zuul-api-gateway:0.0.1-SNAPSHOT
+    container_name: zuul
+    environment:
+      RABBIT_URI: amqp://guest:guest@rabbit-mq:5672
+    ports:
+      - 8765:8765
+    restart: always
+    networks:
+      - pma-network
+    depends_on:
+      - eureka-naming-server
+      - rabbitmq
+      - zipkin-server
+
+  zipkin-server:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    environment:
+      STORAGE_TYPE: mem
+      RABBIT_URI: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - 9411:9411
+    restart: always
+    networks:
+      - pma-network
+    depends_on:
+      - rabbitmq
+
+  customer-service:
+    image: pma/customer-service:0.0.1-SNAPSHOT
+    container_name: customer
+    environment:
+      RABBIT_URI: amqp://guest:guest@rabbit-mq:5672
+    #    build:
+#      context: customer-service
+#      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    restart: always
+    networks:
+      - pma-network
+    depends_on:
+      - eureka-naming-server
+      - rabbitmq
+      - zipkin-server
+      - zuul-api-gateway
+
+  order-service:
+    image: pma/order-service:0.0.1-SNAPSHOT
+    container_name: order
+    environment:
+      RABBIT_URI: amqp://guest:guest@rabbit-mq:5672
+    ports:
+      - 8100:8100
+    restart: always
+    networks:
+      - pma-network
+    depends_on:
+      - eureka-naming-server
+      - customer-service
+      - rabbitmq
+      - zipkin-server
+      - zuul-api-gateway
+
+  rabbitmq:
+    image: rabbitmq:3.5.3-management
+    container_name: rabbit
+    ports:
+      - 5672:5672
+      - 15672:15672
+    restart: always
+    networks:
+      - pma-network
+
+networks:
+  pma-network:
+    name: pma-network
